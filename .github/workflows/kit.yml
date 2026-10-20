@@ -1,0 +1,42 @@
+name: kit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # The whole format matrix, not a sample: see check/kit.py.
+  complete:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 check/kit.py
+
+  # svg/color/go-approx.svg is what mark/main.go writes: a curve through
+  # sampled points, computed by the program, not drawn. This writes it again
+  # and fails if a byte differs, so the mark cannot drift from the program that
+  # defines it. (The PNG, JPG, ICO, ICNS, avatar and social files are rendered
+  # from that SVG by logos/brandgen; check/kit.py above counts them.)
+  mark:
+    name: the mark is what its program writes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: mark/go.mod
+          cache: false
+      - name: Write the mark
+        working-directory: mark
+        run: go run . > ../svg/color/go-approx.svg
+      - name: The committed mark is the one written
+        run: |
+          if ! git diff --exit-code --stat -- svg/color/go-approx.svg; then
+            echo "::error::svg/color/go-approx.svg differs from what mark/main.go writes: run 'cd mark && go run . > ../svg/color/go-approx.svg', then regenerate the kit with logos/brandgen"
+            exit 1
+          fi
